@@ -1,0 +1,84 @@
+bol-tts-marathi
+Copyright 2026 Shreyas Karnik
+
+This project builds on the following open-source projects. Please consult
+their repositories and licenses for further attribution details.
+
+────────────────────────────────────────────────────────────────────────────────
+
+Kokoro-82M — compact TTS model with the inference package we fine-tune.
+  Source:  https://github.com/hexgrad/kokoro
+  Model:   https://huggingface.co/hexgrad/Kokoro-82M
+  License: Apache License 2.0
+  Author:  hexgrad
+  Usage:   We fine-tune the published Kokoro-82M checkpoint on Marathi data.
+           The 178-token Kokoro vocabulary is preserved; slot 144 (a PUA
+           placeholder in the upstream table) is repurposed for ɭ (U+026D,
+           Marathi retroflex lateral). All other slots are unchanged.
+
+────────────────────────────────────────────────────────────────────────────────
+
+kokoro-deutsch — the German Kokoro fine-tuning recipe this project forks.
+  Source:  https://github.com/semidark/kokoro-deutsch
+  License: Apache License 2.0
+  Author:  semidark
+  Usage:   We use the `kokoro` (semidark/kokoro) and `StyleTTS2`
+           (semidark/StyleTTS2) submodules from that project as-is, plus
+           a subset of its `scripts/` (dataset prep, voicepack extraction,
+           inference testing). Our training flow (Stage 1 → Stage 2 → voicepack
+           extraction) follows semidark's recipe directly. Credit for the
+           Kokoro-specific training patches (parametrizations migration,
+           checkpoint save order, TMA, PLBERT length filter, etc.) belongs
+           to semidark and is documented in semidark's repo.
+
+────────────────────────────────────────────────────────────────────────────────
+
+StyleTTS2 — the TTS training framework Kokoro builds on.
+  Source:  https://github.com/yl4579/StyleTTS2
+  Fork:    https://github.com/semidark/StyleTTS2 (used via the kokoro-deutsch submodule)
+  License: MIT License
+  Author:  Yinghao Aaron Li (yl4579)
+  Usage:   StyleTTS2 is the training framework (Stage 1 acoustic + alignment,
+           Stage 2 prosody + adversarial). We use semidark's fork for
+           Kokoro-82M compatibility patches.
+
+────────────────────────────────────────────────────────────────────────────────
+
+misaki — multilingual G2P used by Kokoro.
+  Source:  https://github.com/hexgrad/misaki
+  License: Apache License 2.0
+  Author:  hexgrad
+  Usage:   We use `misaki.espeak.EspeakG2P(language="mr")` for Marathi
+           phonemization. Upstream Kokoro pipeline does not ship a Marathi
+           lang_code; we monkey-patch `kokoro.pipeline.LANG_CODES["m"] = "mr"`
+           at inference time rather than forking the package.
+
+────────────────────────────────────────────────────────────────────────────────
+
+Training datasets (not redistributed in this repo):
+
+  Rasa (AI4Bharat) — Marathi speech corpus, multi-speaker.
+    Source:  https://github.com/AI4Bharat/Rasa
+    Dataset: https://huggingface.co/datasets/ai4bharat/Rasa
+    License: CC-BY-4.0
+
+  IndicVoices-R (AI4Bharat) — gated multi-speaker Indic speech corpus.
+    Source:  https://github.com/AI4Bharat/IndicVoices-R
+    Dataset: https://huggingface.co/datasets/ai4bharat/indicvoices_r
+    License: CC-BY-4.0 (gated access on HuggingFace)
+
+────────────────────────────────────────────────────────────────────────────────
+
+The following directories contain original work by this project's
+contributors:
+
+  scripts/     — Marathi dataset preparation, voicepack extraction helpers,
+                 inference testing, diagnostics, handoff automation
+  configs/     — Marathi fine-tuning configuration (config_marathi_ft.yml,
+                 config_mr.json Kokoro inference config with ɭ@144 patch,
+                 voice_speeds.json per-voice speed tuning)
+  training/    — Marathi-patched symbol table (kokoro_symbols.py with ɭ@144),
+                 Marathi TensorBoard inference helpers (kokoro_tb_utils_mr.py),
+                 Marathi OOD text set (OOD_texts.txt)
+  docs/        — Training guide, troubleshooting, architecture notes for
+                 the Marathi adaptation

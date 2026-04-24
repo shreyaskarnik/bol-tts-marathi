@@ -1,0 +1,20 @@
+{
+  "_description": "Per-voice optimal speed for Kokoro Marathi. Tuned on Stage 2 epoch 2 checkpoint; may shift after full Stage 2 run.",
+  "_reference_sentence": "\u0928\u092e\u0938\u094d\u0915\u093e\u0930! \u092e\u0932\u093e \u0915\u0947\u0933\u0940 \u0906\u0923\u093f \u0906\u0902\u092c\u093e \u0906\u0935\u0921\u0924\u094b.",
+  "mf_asha": {
+    "speed": 0.85,
+    "notes": "User-validated"
+  },
+  "mm_vivek": {
+    "speed": null,
+    "notes": "TBD \u2014 likely similar to Asha (0.85-1.0) since both Rasa"
+  },
+  "mf_mukta": {
+    "speed": 1.0,
+    "notes": "IndicTTS female"
+  },
+  "mm_dnyanesh": {
+    "speed": 1.0,
+    "notes": "IndicTTS male"
+  }
+}

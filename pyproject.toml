@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bol-tts-marathi"
+version = "0.1.0"
+description = "Marathi fine-tune of Kokoro-82M, built on semidark/kokoro-deutsch's recipe."
+readme = "README.md"
+requires-python = ">=3.11, <3.13"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Shreyas Karnik" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+
+# Inference + data-prep dependencies (sufficient for local Mac testing
+# and most dataset-prep workflows). Training-specific deps are in the
+# [project.optional-dependencies] `training` extra — install on the pod.
+dependencies = [
+    "torch>=2.6",
+    "torchaudio>=2.6",
+    "soundfile>=0.12",
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+    "huggingface_hub>=0.24",
+    "transformers>=4.40",
+    "loguru>=0.7",
+    "misaki[en]>=0.9.4",
+    "einops>=0.7",
+    "einops-exts>=0.0.4",
+    "munch>=4.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# Extra packages required on the training pod (Stage 1 + Stage 2 training).
+training = [
+    "accelerate>=0.30",
+    "tensorboard>=2.16",
+    "click>=8.1",
+    "pandas>=2.0",
+    "librosa>=0.10",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[project.urls]
+UpstreamRecipe = "https://github.com/semidark/kokoro-deutsch"
+Kokoro = "https://github.com/hexgrad/kokoro"
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

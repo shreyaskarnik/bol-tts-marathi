@@ -1,0 +1,13 @@
+gradio==4.44.0
+torch>=2.6
+numpy>=1.26
+soundfile>=0.12
+huggingface_hub>=0.24
+transformers>=4.40
+misaki[en]>=0.9.4
+munch>=4.0
+einops>=0.7
+einops-exts>=0.0.4
+loguru>=0.7
+# Kokoro inference package (installed as editable submodule if you fork; or pip from git):
+kokoro @ git+https://github.com/semidark/kokoro.git
