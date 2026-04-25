@@ -1,19 +1,29 @@
-"""Trim pre-speech silence from audio clips before voicepack extraction.
+"""Trim leading + trailing silence from audio clips before voicepack extraction.
 
-Some datasets (e.g. SPRINGLab/IndicTTS_Marathi) ship clips with 0.3-0.4 s of
-consistent leading silence. The voicepack style encoder averages this into
-the speaker's acoustic signature and the model then applies "this voice
-starts with 0.4 s of silence" at synthesis → the first word gets eaten /
-heard as a hiss.
+Voicepack style encoders average per-clip acoustic signatures into a single
+ref_s vector that the decoder treats as voice identity. If clips have any
+consistent silence padding at either end, that silence becomes part of the
+voice — the decoder dutifully reproduces it on every synthesis.
 
-Fix: trim to ~50 ms of pre-speech pad before extracting. Run this on any
-audio dir before passing to `scripts/upstream/extract_voicepack.py`.
+We've hit this twice in bol-tts-marathi:
+  * **Leading silence** (IndicTTS, fixed pre-Stage-1) — SPRINGLab clips have
+    0.3-0.4 s of pre-speech silence. Result: voicepack ate the first word /
+    rendered an audible hiss before speech started.
+  * **Trailing silence** (Rasa, observed v0.1-preview) — Rasa Marathi clips
+    don't tail-trim consistently. Result: word-final semi-vowels and
+    aspirated stops get clipped on Asha + Vivek synthesis (e.g. final /j/
+    in सांगतोय fades early). Mukta + Dnyanesh, derived from re-trimmed
+    IndicTTS, don't show this.
+
+Run on any audio dir before passing to `scripts/upstream/extract_voicepack.py`.
+Defaults keep 50 ms of pad on each side — enough for natural attack/release,
+small enough to not contaminate the style vector.
 
 Usage:
 
-    python scripts/trim_leading_silence.py \
-        --src-dir dataset/audio/indictts_mr_female \
-        --dst-dir dataset/audio/indictts_mr_female_trimmed
+    python scripts/trim_silence.py \
+        --src-dir dataset/audio/rasa_marathi_female \
+        --dst-dir dataset/audio/rasa_marathi_female_trimmed
 
     # then extract voicepack from the _trimmed dir as usual
 """

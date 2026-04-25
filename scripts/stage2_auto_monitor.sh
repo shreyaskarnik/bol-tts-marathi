@@ -50,7 +50,11 @@ while true; do
 
   LATEST=$(echo "$STATE" | grep -E 'epoch_2nd_[0-9]+\.pth' | tail -1)
   LATEST_N=$(echo "$LATEST" | sed -E 's|.*epoch_2nd_0+([0-9]+)\.pth|\1|' | grep -oE '[0-9]+' | head -1)
-  NO_PROC=$(echo "$STATE" | grep -c "NO_TRAIN_PROC" || echo 0)
+  # grep -c always prints a count + exits 1 when zero matches. The old
+  # `|| echo 0` fallback then APPENDED a second "0", making NO_PROC="0\n0"
+  # which crashed the [[ -ge 1 ]] check below. Drop the echo; suppress the
+  # nonzero exit with || true instead.
+  NO_PROC=$(echo "$STATE" | grep -c "NO_TRAIN_PROC" || true)
 
   echo "[$(date)] latest epoch_2nd N=${LATEST_N:-none}  no_proc=${NO_PROC}"
 

@@ -34,16 +34,21 @@ aplay dataset/audio/indicvoices_r/mr_s1418_000000.wav
 
 Pick one clearly-female voice → `mf_mukta`. One clearly-male voice → `mm_dnyanesh`. Prefer speakers with higher utt count (70+) for cleaner style extraction.
 
-**Important**: if the source recordings have consistent leading silence (common in studio datasets like SPRINGLab/IndicTTS — 0.3-0.4 s of pre-speech pad), **trim before extracting**:
+**Important**: silence at either end of source clips contaminates the style vector. The decoder learns to reproduce that silence as voice identity, which manifests as:
+
+- **Leading silence** → first word gets eaten + audible hiss before speech (seen with raw SPRINGLab/IndicTTS, 0.3-0.4 s pre-speech pad).
+- **Trailing silence** → word-final semi-vowels and aspirated stops get clipped (seen with raw Rasa voices Asha/Vivek; final /j/ in सांगतोय fades early).
+
+Always trim both ends before extracting (`trim_silence.py` keeps a 50 ms pad each side):
 
 ```bash
-python scripts/trim_leading_silence.py \
-  --src-dir dataset/audio/indictts_mr_female \
-  --dst-dir dataset/audio/indictts_mr_female_trimmed
+python scripts/trim_silence.py \
+  --src-dir dataset/audio/rasa_marathi_female \
+  --dst-dir dataset/audio/rasa_marathi_female_trimmed
 
 # then extract from the *_trimmed dir
 python scripts/upstream/extract_voicepack.py \
-  --audio-dir dataset/audio/indictts_mr_female_trimmed \
+  --audio-dir dataset/audio/rasa_marathi_female_trimmed \
   ...
 ```
 
