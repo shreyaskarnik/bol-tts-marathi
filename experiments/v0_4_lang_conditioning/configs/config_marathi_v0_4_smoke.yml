@@ -1,0 +1,150 @@
+# bol-tts-marathi v0.4 SMOKE TEST — 1-epoch architecture validation.
+#
+# Identical to config_marathi_v0_4_langcond.yml except:
+#   - epochs: 1 (just enough for ~62 steps at bs=8 on a 500-row manifest)
+#   - data_params point at the stub smoke manifests (lang_ids are pseudo-random
+#     not semantically aligned — fine for architecture validation)
+#   - log_dir is a separate "smoke" subdir so it doesn't pollute the real run
+#
+# What this validates:
+#   1. patches apply cleanly (CustomAlbert has lang_embedding, dataloader emits
+#      9-element batches, train_second.py threads lang_ids through)
+#   2. forward+backward runs end-to-end without NaN
+#   3. lang_embedding gradient flows (both rows: mr=0 and en=1)
+#   4. predictor_encoder norm stays >0.5 across the epoch (no v0.2-attempt-1 collapse)
+#   5. continuation init from v0.2 final ckpt works with strict=False loading
+#
+# What this does NOT validate:
+#   - Whether v0.4 actually improves Minglish quality (need full run + eval)
+#   - Whether the lexicon flip rate is in the sweet spot (smoke manifest is stub)
+#
+# Launch (from kokoro-deutsch/StyleTTS2):
+#   STAGE=2 CONFIG=../../bol-tts-marathi/experiments/v0_4_lang_conditioning/configs/config_marathi_v0_4_smoke.yml ./launch_training.sh
+#
+# Expected runtime: ~5-10 min on A100. Watch the predictor_encoder norms and
+# lang_embedding gradients in the TensorBoard log.
+batch_size: 8
+epochs: 1
+epochs_1st: 10
+epochs_2nd: 1
+save_freq: 1
+
+pretrained_model: "logs/kokoro-marathi/epoch_2nd_v0_2_FINAL.pth"
+first_stage_path: "first_stage.pth"
+load_only_params: true
+second_stage_load_pretrained: true
+
+log_dir: "logs/kokoro-marathi-v0_4-smoke"
+
+data_params:
+  train_data: "../experiments/v0_4_lang_conditioning/data/train_list_smoke.txt"
+  val_data: "../experiments/v0_4_lang_conditioning/data/val_list_smoke.txt"
+  root_path: "../dataset/audio"
+  OOD_data: "../training/OOD_texts.txt"
+  min_length: 50
+  num_workers: 8
+
+preprocess_params:
+  sr: 24000
+  spect_params:
+    n_fft: 2048
+    win_length: 1200
+    hop_length: 300
+    n_mels: 80
+    fmin: 0
+    fmax: 8000
+
+model_params:
+  dim_in: 64
+  n_token: 178
+  hidden_dim: 512
+  style_dim: 128
+  max_dur: 50
+  multispeaker: false
+  n_mels: 80
+  dropout: 0.2
+  n_layer: 3
+  text_encoder_kernel_size: 5
+
+  decoder:
+    type: istftnet
+    upsample_rates: [10, 6]
+    upsample_kernel_sizes: [20, 12]
+    upsample_initial_channel: 512
+    resblock_kernel_sizes: [3, 7, 11]
+    resblock_dilation_sizes: [[1, 3, 5], [1, 3, 5], [1, 3, 5]]
+    gen_istft_n_fft: 20
+    gen_istft_hop_size: 5
+
+  diffusion:
+    embedding_mask_proba: 0.1
+    transformer:
+      num_layers: 3
+      num_heads: 8
+      head_features: 64
+      multiplier: 2
+    dist:
+      sigma_data: 0.2
+      estimate_sigma_data: true
+      mean: -3.0
+      std: 1.0
+
+  plbert:
+    hidden_size: 768
+    num_attention_heads: 12
+    intermediate_size: 2048
+    max_position_embeddings: 512
+    num_hidden_layers: 12
+    dropout: 0.1
+
+  slm:
+    model: "microsoft/wavlm-base-plus"
+    sr: 16000
+    hidden: 768
+    nlayers: 13
+    initial_channel: 64
+
+loss_params:
+  lambda_gen: 1.0
+  lambda_mel: 5.0
+  lambda_dur: 1.0
+  lambda_ce: 20.0
+  lambda_F0: 1.0
+  lambda_norm: 1.0
+  lambda_s2s: 1.0
+  lambda_mono: 1.0
+  lambda_slm: 1.0
+  lambda_diff: 0.0
+  lambda_sty: 0.0
+  TMA_epoch: 0
+  diff_epoch: 999
+  joint_epoch: 3   # No adversarial loss in epoch 0 anyway (joint_epoch:3)
+
+optimizer_params:
+  lr: 0.0001
+  bert_lr: 0.00001
+  ft_lr: 0.0001
+
+training:
+  epochs: 1
+  batch_size: 4
+  save_freq: 1
+  log_interval: 10
+  eval_interval: 500
+  pretrained_model: ""
+  load_only_params: true
+  second_stage_load_pretrained: true
+
+F0_path: "Utils/JDC/bst.t7"
+ASR_config: "Utils/ASR/config.yml"
+ASR_path: "Utils/ASR/epoch_00080.pth"
+PLBERT_dir: "Utils/PLBERT/"
+
+slmadv_params:
+  min_len: 100
+  max_len: 500
+  batch_percentage: 0.5
+  iter: 10
+  thresh: 5
+  scale: 0.01
+  sig: 1.5

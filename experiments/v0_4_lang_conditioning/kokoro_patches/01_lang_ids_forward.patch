@@ -1,0 +1,98 @@
+diff --git a/kokoro/model.py b/kokoro/model.py
+index a7622ba..e728b2a 100644
+--- a/kokoro/model.py
++++ b/kokoro/model.py
+@@ -88,18 +88,20 @@ class KModel(torch.nn.Module):
+         self,
+         input_ids: torch.LongTensor,
+         ref_s: torch.FloatTensor,
+-        speed: float = 1
++        speed: float = 1,
++        lang_ids: Optional[torch.LongTensor] = None,
+     ) -> tuple[torch.FloatTensor, torch.LongTensor]:
+         input_lengths = torch.full(
+-            (input_ids.shape[0],), 
+-            input_ids.shape[-1], 
++            (input_ids.shape[0],),
++            input_ids.shape[-1],
+             device=input_ids.device,
+             dtype=torch.long
+         )
+ 
+         text_mask = torch.arange(input_lengths.max()).unsqueeze(0).expand(input_lengths.shape[0], -1).type_as(input_lengths)
+         text_mask = torch.gt(text_mask+1, input_lengths.unsqueeze(1)).to(self.device)
+-        bert_dur = self.bert(input_ids, attention_mask=(~text_mask).int())
++        # v0.4: pass lang_ids to PLBERT (None disables — bypasses lang_embedding)
++        bert_dur = self.bert(input_ids, lang_ids=lang_ids, attention_mask=(~text_mask).int())
+         d_en = self.bert_encoder(bert_dur).transpose(-1, -2)
+         s = ref_s[:, 128:]
+         d = self.predictor.text_encoder(d_en, s, input_lengths, text_mask)
+@@ -123,14 +125,20 @@ class KModel(torch.nn.Module):
+         phonemes: str,
+         ref_s: torch.FloatTensor,
+         speed: float = 1,
+-        return_output: bool = False
++        return_output: bool = False,
++        lang_ids: Optional[torch.LongTensor] = None,
+     ) -> Union['KModel.Output', torch.FloatTensor]:
+         input_ids = list(filter(lambda i: i is not None, map(lambda p: self.vocab.get(p), phonemes)))
+         logger.debug(f"phonemes: {phonemes} -> input_ids: {input_ids}")
+         assert len(input_ids)+2 <= self.context_length, (len(input_ids)+2, self.context_length)
+         input_ids = torch.LongTensor([[0, *input_ids, 0]]).to(self.device)
+         ref_s = ref_s.to(self.device)
+-        audio, pred_dur = self.forward_with_tokens(input_ids, ref_s, speed)
++        # v0.4: thread lang_ids through if provided. Caller is expected to
++        # have built lang_ids of length len(phonemes)+2 (boundary 0s included)
++        # and shape [1, T] matching input_ids.
++        if lang_ids is not None:
++            lang_ids = lang_ids.to(self.device)
++        audio, pred_dur = self.forward_with_tokens(input_ids, ref_s, speed, lang_ids=lang_ids)
+         audio = audio.squeeze().cpu()
+         pred_dur = pred_dur.cpu() if pred_dur is not None else None
+         logger.debug(f"pred_dur: {pred_dur}")
+@@ -145,7 +153,8 @@ class KModelForONNX(torch.nn.Module):
+         self,
+         input_ids: torch.LongTensor,
+         ref_s: torch.FloatTensor,
+-        speed: float = 1
++        speed: float = 1,
++        lang_ids: Optional[torch.LongTensor] = None,
+     ) -> tuple[torch.FloatTensor, torch.LongTensor]:
+-        waveform, duration = self.kmodel.forward_with_tokens(input_ids, ref_s, speed)
++        waveform, duration = self.kmodel.forward_with_tokens(input_ids, ref_s, speed, lang_ids=lang_ids)
+         return waveform, duration
+diff --git a/kokoro/modules.py b/kokoro/modules.py
+index f183bd3..c41fe24 100644
+--- a/kokoro/modules.py
++++ b/kokoro/modules.py
+@@ -177,7 +177,28 @@ class DurationEncoder(nn.Module):
+ 
+ 
+ # https://github.com/yl4579/StyleTTS2/blob/main/Utils/PLBERT/util.py
++# v0.4: per-token language conditioning. Mirrors the StyleTTS2 fork
++# (Utils/PLBERT/util.py) so ckpts are interchangeable.
++NUM_LANGUAGES = 2  # 0=mr, 1=en
++
++
+ class CustomAlbert(AlbertModel):
+-    def forward(self, *args, **kwargs):
+-        outputs = super().forward(*args, **kwargs)
++    def __init__(self, config):
++        super().__init__(config)
++        self.lang_embedding = torch.nn.Embedding(NUM_LANGUAGES, config.embedding_size)
++        torch.nn.init.normal_(self.lang_embedding.weight, std=0.02)
++
++    def forward(self, input_ids=None, lang_ids=None, attention_mask=None, **kwargs):
++        if lang_ids is not None and input_ids is not None:
++            word_embeds = self.embeddings.word_embeddings(input_ids)
++            lang_embeds = self.lang_embedding(lang_ids)
++            outputs = super().forward(
++                inputs_embeds=word_embeds + lang_embeds,
++                attention_mask=attention_mask,
++                **kwargs,
++            )
++        else:
++            outputs = super().forward(
++                input_ids=input_ids, attention_mask=attention_mask, **kwargs
++            )
+         return outputs.last_hidden_state

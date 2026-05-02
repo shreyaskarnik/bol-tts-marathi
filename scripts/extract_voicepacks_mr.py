@@ -48,6 +48,7 @@ from pathlib import Path
 # Default reference-audio sources (pod-side). Override via CLI if paths differ.
 DEFAULT_RASA_DIR = Path("/workspace/bol_run/dataset/audio/rasa")
 DEFAULT_IVR_DIR = Path("/workspace/bol_run/dataset/audio/indicvoices_r")
+DEFAULT_SPRINGLAB_DIR = Path("/workspace/bol_run/dataset/audio/springlab_mr")
 
 # Where the upstream semidark script lives on the pod (same layout as our
 # The upstream extract_voicepack.py is vendored in ./scripts/upstream/.
@@ -62,15 +63,18 @@ REF_CLIPS_PER_VOICE_RASA = 40  # upstream samples 200 by default, but Rasa has
 #                                 thousands of clips per speaker, so 40 diverse
 #                                 in-range clips is plenty and much faster.
 REF_CLIPS_PER_VOICE_IVR = 60   # IV-R has <120 clips/speaker; take up to 60.
+REF_CLIPS_PER_VOICE_SPRINGLAB = 40  # SPRINGLab has ~5K clips/speaker, glob+filter same as Rasa.
 
 VOICES = [
     # (voice_id, source, selector_info_for_voice)
-    # source is "rasa" or "ivr"; for "rasa" the selector is the speaker-name
-    # prefix (marathi_female / marathi_male); for "ivr" it's filled from CLI.
-    {"id": "mf_asha",      "source": "rasa", "prefix": "marathi_female"},
-    {"id": "mm_vivek",     "source": "rasa", "prefix": "marathi_male"},
-    {"id": "mf_mukta",     "source": "ivr",  "prefix": None},   # filled from --mukta-speaker
-    {"id": "mm_dnyanesh",  "source": "ivr",  "prefix": None},   # filled from --dnyanesh-speaker
+    # source is "rasa" / "ivr" / "springlab"; for rasa+springlab the selector is
+    # the speaker-name prefix; for ivr it's filled from CLI.
+    {"id": "mf_asha",      "source": "rasa",      "prefix": "marathi_female"},
+    {"id": "mm_vivek",     "source": "rasa",      "prefix": "marathi_male"},
+    {"id": "mf_mukta",     "source": "ivr",       "prefix": None},   # filled from --mukta-speaker
+    {"id": "mm_dnyanesh",  "source": "ivr",       "prefix": None},   # filled from --dnyanesh-speaker
+    {"id": "mf_priya",     "source": "springlab", "prefix": "springlab_female"},
+    {"id": "mm_arjun",     "source": "springlab", "prefix": "springlab_male"},
 ]
 
 
@@ -167,6 +171,8 @@ def main() -> None:
                     help=f"Rasa audio dir (default: {DEFAULT_RASA_DIR}).")
     ap.add_argument("--ivr-dir", type=Path, default=DEFAULT_IVR_DIR,
                     help=f"IndicVoices-R audio dir (default: {DEFAULT_IVR_DIR}).")
+    ap.add_argument("--springlab-dir", type=Path, default=DEFAULT_SPRINGLAB_DIR,
+                    help=f"SPRINGLab audio dir (default: {DEFAULT_SPRINGLAB_DIR}).")
     ap.add_argument("--mukta-speaker", required=True,
                     help="IV-R speaker id for mf_mukta (e.g. mr_s1418). "
                          "Use pick_ivr_voices.py to pick.")
@@ -215,6 +221,9 @@ def main() -> None:
             stage_dir = tmp_root / vid
             if v["source"] == "rasa":
                 refs = collect_rasa_refs(args.rasa_dir, v["prefix"], REF_CLIPS_PER_VOICE_RASA, rng)
+            elif v["source"] == "springlab":
+                # SPRINGLab uses same prefix-glob+duration-filter as Rasa.
+                refs = collect_rasa_refs(args.springlab_dir, v["prefix"], REF_CLIPS_PER_VOICE_SPRINGLAB, rng)
             else:
                 refs = collect_ivr_refs(args.ivr_dir, v["prefix"], REF_CLIPS_PER_VOICE_IVR)
             print(f"  picked {len(refs)} reference clips -> staged at {stage_dir}")

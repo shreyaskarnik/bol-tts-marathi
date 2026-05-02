@@ -221,8 +221,15 @@ extract_bundles() {
 
     # Code bundle: strip the top-level bol_training_v5/ dir so contents land directly in $RUN_DIR.
     # --no-same-owner prevents chown-fail on Mac-built tarballs (uid=501).
-    log "extracting code bundle into $RUN_DIR/"
-    tar --no-same-owner --strip-components=1 -xzf "$CODE_TAR" -C "$RUN_DIR" \
+    # --keep-newer-files protects in-place patches you may have applied to
+    # bol_run/StyleTTS2/*.py between launches (e.g. the anomaly_detect gate
+    # in train_second.py). Without it, a re-run of setup silently overwrites
+    # the patched files with the bundle's pristine versions, re-introducing
+    # bugs we just fixed. See feedback_bundle_tar_overwrites_patches.md.
+    # If you genuinely want to reset a file to the bundle's version, delete
+    # the local copy first (`rm bol_run/StyleTTS2/train_second.py`) and re-run.
+    log "extracting code bundle into $RUN_DIR/ (keep-newer-files)"
+    tar --no-same-owner --keep-newer-files --strip-components=1 -xzf "$CODE_TAR" -C "$RUN_DIR" \
         || die "code bundle extraction failed"
 
     # Data bundle: extract to a tempdir then merge in (don't clobber kokoro_base.pth or other
@@ -392,6 +399,24 @@ run_stage_2() {
 
     local load_pretrained
     load_pretrained=$(awk '/^second_stage_load_pretrained:/ {print $2; exit}' "$cfg_path" | tr -d '"')
+
+    # Guard against the v0.2-attempt-1 trap. `second_stage_load_pretrained: true`
+    # (continuation init from a previous Stage 2 final) + `joint_epoch: 0` (no
+    # adversarial warmup) traps predictor_encoder in a degenerate small-magnitude
+    # regime in epoch 1 from which it can't escape. Voicepacks come out
+    # "shaky / elderly speaker" across all speakers including previously-trained
+    # ones. See feedback_predictor_encoder_lr_collapse.md.
+    local joint_epoch
+    joint_epoch=$(awk '/^[[:space:]]*joint_epoch:/ {print $2; exit}' "$cfg_path" | tr -d '"')
+    if [[ "$load_pretrained" == "true" && "${joint_epoch:-3}" == "0" && -z "${STYLETTS2_ALLOW_NO_WARMUP:-}" ]]; then
+        die "REFUSING: second_stage_load_pretrained: true + joint_epoch: 0 is the
+predictor_encoder-collapse trap. New-speaker continuation runs need
+adversarial warmup. Either:
+  • set joint_epoch: >= 3 (recommended), OR
+  • set second_stage_load_pretrained: false + first_stage_path: \"first_stage.pth\"
+    (true Stage-2-from-Stage-1 restart with the new data).
+To override anyway: STYLETTS2_ALLOW_NO_WARMUP=1 ./launch_training.sh ..."
+    fi
 
     if [[ "$load_pretrained" == "true" ]]; then
         # Mode (b): Stage 2.5 — init from pretrained_model directly.

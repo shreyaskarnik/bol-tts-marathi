@@ -1,43 +1,52 @@
-# bol-tts-marathi v0.2 data mix — true Stage 2 restart from Stage 1.
+# bol-tts-marathi v0.4 — language-conditioned PLBERT (continuation from v0.2 final).
 #
-# Use this when the v0.2 continuation recipe collapses prosody and you want to
-# keep the expanded corpus (Rasa-trimmed + IV-R + SPRINGLab) but go back to the
-# standard Stage-2 load path from first_stage.pth.
+# Init source: epoch_2nd_v0_2_FINAL.pth (validated v0.2 ckpt, 4-voice lineup
+# stable). New lang_embedding param is randomly initialized; existing weights
+# loaded via strict=False (the missing-key path in load_checkpoint at
+# StyleTTS2/models.py:870).
 #
-# Key properties of the validated-safe v0.2 recipe:
-#   • second_stage_load_pretrained: false
-#   • first_stage_path is the real init source for Stage 2
-#   • joint_epoch: 3 (standard Stage-2 warmup)
-#   • lr restored to 1e-4
-#   • pretrained_model intentionally left empty so this file cannot accidentally
-#     take the Stage 2.5 continuation branch
+# Training axis: language conditioning at PLBERT input embedding layer.
+# 0=Marathi, 1=English. Tokens labeled per phoneme via build_v0_4_manifest.py.
 #
-# Before launch, make sure the Stage-1 final checkpoint is present at:
-#   StyleTTS2/logs/kokoro-marathi/first_stage.pth
+# Why continuation (`second_stage_load_pretrained: true`) is safe HERE despite
+# the v0.2 attempts 1+2 trap (predictor_encoder collapse with continuation +
+# joint_epoch:0):
+#   1. We keep `joint_epoch: 3` (NOT 0) — adversarial warmup intact, which is
+#      the actual fix per feedback_predictor_encoder_lr_collapse.md.
+#   2. The new lang_embedding adds learnable freedom that should help the
+#      predictor adapt to the conditioning, not collapse from it.
+#   3. Belt-and-suspenders: launch_training.sh refuses to run if
+#      `second_stage_load_pretrained: true` AND `joint_epoch: 0` simultaneously.
 #
-# Launch:
-#   STAGE=2 CONFIG=../configs/config_marathi_v0_2.yml ./launch_training.sh
+# Launch (from kokoro-deutsch/StyleTTS2 on the v0_4_lang_conditioning branch):
+#   STAGE=2 CONFIG=../../bol-tts-marathi/experiments/v0_4_lang_conditioning/configs/config_marathi_v0_4_langcond.yml ./launch_training.sh
 batch_size: 8
 epochs: 10
 epochs_1st: 10
 epochs_2nd: 10
 save_freq: 1
-pretrained_model: ""
+
+# Init source — v0.2 final ckpt. Path is resolved relative to launch dir
+# (StyleTTS2/). Smoke-test override: pass STAGE2_PRETRAINED env var.
+pretrained_model: "logs/kokoro-marathi/epoch_2nd_v0_2_FINAL.pth"
 first_stage_path: "first_stage.pth"
 load_only_params: true
-second_stage_load_pretrained: false  # false = load Stage 1 ckpt from first_stage_path
-# ─────────────────────────────────────────────────────────────────────────────
-# bol-tts Marathi Kokoro-82M Fine-Tuning Config
-# ─────────────────────────────────────────────────────────────────────────────
+second_stage_load_pretrained: true   # continuation from v0.2 — see header note
+
+# Smoke-test mode: when STYLETTS2_SMOKE_TEST=1 in env, train_second.py should
+# bail after ~50-100 steps. (Implementation note: this hook is wired in the
+# same patch that adds lang_ids; see scripts/train_v0_4_smoke.sh.)
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-log_dir: "logs/kokoro-marathi"
+log_dir: "logs/kokoro-marathi-v0_4"
 
 # ── Data ─────────────────────────────────────────────────────────────────────
-# Keep the v0.2 data recipe: Rasa-trimmed + IV-R + SPRINGLab.
+# Re-built v0.4 manifests (see scripts/build_v0_4_manifest.py): same audio,
+# but text re-phonemized through espeak with romanized loanwords + per-phoneme
+# lang_ids. Train/val list paths point to the v0.4 manifest output.
 data_params:
-  train_data: "../training/train_list.txt"
-  val_data: "../training/val_list.txt"
+  train_data: "../experiments/v0_4_lang_conditioning/data/train_list_v0_4.txt"
+  val_data: "../experiments/v0_4_lang_conditioning/data/val_list_v0_4.txt"
   root_path: "../dataset/audio"
   OOD_data: "../training/OOD_texts.txt"
   min_length: 50
@@ -120,12 +129,13 @@ loss_params:
   lambda_sty: 0.0
   TMA_epoch: 0
   diff_epoch: 999
-  joint_epoch: 3  # standard Stage-2 warmup; adversarial training starts at epoch 3
+  joint_epoch: 3  # NEVER set to 0 with second_stage_load_pretrained: true
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
+# v0.2 LR baseline. Halve only if v0.4 shows divergence in pilot.
 optimizer_params:
   lr: 0.0001
-  bert_lr: 0.00001
+  bert_lr: 0.00001    # PLBERT (incl. new lang_embedding) gets bert_lr
   ft_lr: 0.0001
 
 # Dead config block kept only because upstream files still carry it; top-level
@@ -138,7 +148,7 @@ training:
   eval_interval: 500
   pretrained_model: ""
   load_only_params: true
-  second_stage_load_pretrained: false
+  second_stage_load_pretrained: true
 
 # ── Pitch Extractor ──────────────────────────────────────────────────────────
 F0_path: "Utils/JDC/bst.t7"
