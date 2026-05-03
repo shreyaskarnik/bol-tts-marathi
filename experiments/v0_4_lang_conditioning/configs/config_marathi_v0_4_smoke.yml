@@ -42,8 +42,8 @@ freeze_backbone_epochs: 1
 log_dir: "logs/kokoro-marathi-v0_4-smoke"
 
 data_params:
-  train_data: "../experiments/v0_4_lang_conditioning/data/train_list_smoke.txt"
-  val_data: "../experiments/v0_4_lang_conditioning/data/val_list_smoke.txt"
+  train_data: "../experiments/v0_4_lang_conditioning/data/train_list_smoke_intspk.txt"
+  val_data: "../experiments/v0_4_lang_conditioning/data/val_list_smoke_intspk.txt"
   root_path: "../dataset/audio"
   OOD_data: "../training/OOD_texts.txt"
   min_length: 50
