@@ -34,6 +34,11 @@ first_stage_path: "first_stage.pth"
 load_only_params: true
 second_stage_load_pretrained: true
 
+# v0.4.2: freeze the loaded backbone for first N epochs so only lang_embedding
+# trains during the warmup (prevents the cascading gradient pressure that
+# catastrophically reshaped trained modules in v0.4.0/4.1 — see post-mortem).
+freeze_backbone_epochs: 1
+
 log_dir: "logs/kokoro-marathi-v0_4-smoke"
 
 data_params:
