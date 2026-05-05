@@ -22,9 +22,17 @@ classifiers = [
 # Inference + data-prep dependencies (sufficient for local Mac testing
 # and most dataset-prep workflows). Training-specific deps are in the
 # [project.optional-dependencies] `training` extra — install on the pod.
+#
+# IMPORTANT: torch is pinned to <2.9 because torch.onnx.export(dynamo=False)
+# silently produces a static-output ONNX on Kokoro's KModel under torch 2.9+
+# (the legacy TorchScript tracer path breaks on the InstanceNorm-under-
+# spectral-norm + LSTM + CustomSTFT combo). Symptom: file loads + runs in
+# ORT but produces silent / static audio. See memory entry
+# `feedback_torch_211_breaks_kokoro_onnx_export.md` for the full incident.
+# Recover by pinning torch==2.6 in a dedicated `.venv-export` for export work.
 dependencies = [
-    "torch>=2.6",
-    "torchaudio>=2.6",
+    "torch>=2.6,<2.9",
+    "torchaudio>=2.6,<2.9",
     "soundfile>=0.12",
     "numpy>=1.26",
     "pyyaml>=6.0",
