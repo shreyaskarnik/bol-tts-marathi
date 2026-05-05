@@ -172,8 +172,18 @@ def run_kokoro_inference(model, test_tokens, voicepack, device, text_cleaner):
                     input_lengths.unsqueeze(1),
                 ).to(device)
 
-                # BERT + encoder
-                bert_dur = model.bert(input_ids, attention_mask=(~text_mask).int())
+                # BERT + encoder. Pass lang_ids to match the training forward
+                # (train_second.py threads dataloader lang_ids into model.bert);
+                # without this CustomAlbert.forward bypasses lang_embedding,
+                # giving PLBERT input that is OOD by lang_embedding[0] vs.
+                # what the predictor was trained against → radio-tuning audio.
+                # All TB sentences are Marathi → row 0 (zeros tensor).
+                lang_ids = torch.zeros_like(input_ids)
+                bert_dur = model.bert(
+                    input_ids,
+                    lang_ids=lang_ids,
+                    attention_mask=(~text_mask).int(),
+                )
                 d_en = model.bert_encoder(bert_dur).transpose(-1, -2)
 
                 # Predict duration

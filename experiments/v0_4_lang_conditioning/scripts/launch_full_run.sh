@@ -52,8 +52,10 @@ echo "[launch] config: $CONFIG"
 echo "[launch] train manifest: $TRAIN_MANIFEST_RESOLVED ($(wc -l < "$TRAIN_MANIFEST_RESOLVED") rows)"
 
 # ─── Persistent env (idempotent) ────────────────────────────────────────────
-export PYTHONUSERBASE=/workspace/.local
-export PATH=/workspace/.local/bin:$PATH
+# setup_pod_env.sh self-detects whether deps are importable; on the current
+# Kokoro pod image they're system-wide and the script is a no-op. We don't
+# pre-export any PYTHONUSERBASE/PATH here — that lock-in to /workspace/.local
+# burned us once when /workspace was wiped.
 bash "$EXP_DIR/scripts/setup_pod_env.sh"
 
 # Training-specific env vars

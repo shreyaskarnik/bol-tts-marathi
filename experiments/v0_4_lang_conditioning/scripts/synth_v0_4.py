@@ -189,6 +189,11 @@ def synthesize(
     s_prosodic = ref_s[:, 128:]
 
     d = model.predictor.text_encoder(d_en, s_prosodic, input_lengths, text_mask)
+    # v0.5: FiLM language conditioning. apply_lang_film is identity when lang_ids
+    # is None (so pre-v0.5 ckpts behave unchanged) AND when γ=1, β=0 (so a
+    # v0.5 ckpt with un-trained FiLM also behaves unchanged).
+    if hasattr(model.predictor, "apply_lang_film"):
+        d = model.predictor.apply_lang_film(d, lang_ids_t)
     x, _ = model.predictor.lstm(d)
     duration = model.predictor.duration_proj(x)
     duration = torch.sigmoid(duration).sum(axis=-1) / speed

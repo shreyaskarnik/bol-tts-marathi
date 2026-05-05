@@ -67,14 +67,17 @@ REF_CLIPS_PER_VOICE_SPRINGLAB = 40  # SPRINGLab has ~5K clips/speaker, glob+filt
 
 VOICES = [
     # (voice_id, source, selector_info_for_voice)
-    # source is "rasa" / "ivr" / "springlab"; for rasa+springlab the selector is
-    # the speaker-name prefix; for ivr it's filled from CLI.
+    # source is "rasa" / "ivr" / "springlab"; selector is the speaker-name prefix.
+    #
+    # Source-of-truth for the demo's labels is webgpu-demo/public/voicepacks.json.
+    # mf_mukta / mm_dnyanesh used to be IV-R speaker IDs (mr_s1418, mr_s3df3) but
+    # the actual deployed voicepacks were renamed from mf_priya / mm_arjun
+    # (SpringLab) at the v0.2 ship. The CLI's --mukta-speaker / --dnyanesh-speaker
+    # args are kept for back-compat but ignored for these two now.
     {"id": "mf_asha",      "source": "rasa",      "prefix": "marathi_female"},
     {"id": "mm_vivek",     "source": "rasa",      "prefix": "marathi_male"},
-    {"id": "mf_mukta",     "source": "ivr",       "prefix": None},   # filled from --mukta-speaker
-    {"id": "mm_dnyanesh",  "source": "ivr",       "prefix": None},   # filled from --dnyanesh-speaker
-    {"id": "mf_priya",     "source": "springlab", "prefix": "springlab_female"},
-    {"id": "mm_arjun",     "source": "springlab", "prefix": "springlab_male"},
+    {"id": "mf_mukta",     "source": "springlab", "prefix": "springlab_female"},
+    {"id": "mm_dnyanesh",  "source": "springlab", "prefix": "springlab_male"},
 ]
 
 
@@ -173,12 +176,14 @@ def main() -> None:
                     help=f"IndicVoices-R audio dir (default: {DEFAULT_IVR_DIR}).")
     ap.add_argument("--springlab-dir", type=Path, default=DEFAULT_SPRINGLAB_DIR,
                     help=f"SPRINGLab audio dir (default: {DEFAULT_SPRINGLAB_DIR}).")
-    ap.add_argument("--mukta-speaker", required=True,
-                    help="IV-R speaker id for mf_mukta (e.g. mr_s1418). "
-                         "Use pick_ivr_voices.py to pick.")
-    ap.add_argument("--dnyanesh-speaker", required=True,
-                    help="IV-R speaker id for mm_dnyanesh (e.g. mr_s3df3). "
-                         "Use pick_ivr_voices.py to pick.")
+    ap.add_argument("--mukta-speaker", default=None,
+                    help="(DEPRECATED) IV-R speaker id for mf_mukta. mf_mukta now "
+                         "sources from SpringLab; this flag is kept for back-compat "
+                         "but ignored.")
+    ap.add_argument("--dnyanesh-speaker", default=None,
+                    help="(DEPRECATED) IV-R speaker id for mm_dnyanesh. mm_dnyanesh "
+                         "now sources from SpringLab; this flag is kept for "
+                         "back-compat but ignored.")
     ap.add_argument("--upstream-script", type=Path, default=DEFAULT_UPSTREAM_SCRIPT,
                     help=f"Path to semidark's scripts/extract_voicepack.py "
                          f"(default: {DEFAULT_UPSTREAM_SCRIPT}).")
@@ -198,13 +203,10 @@ def main() -> None:
     upstream = load_upstream(args.upstream_script)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Fill in IV-R speaker IDs on the voice specs.
+    # Voice specs are static now — mf_mukta / mm_dnyanesh source from SpringLab,
+    # not IV-R. The CLI's --mukta-speaker / --dnyanesh-speaker args are kept for
+    # back-compat but no longer override prefix.
     voices = [dict(v) for v in VOICES]
-    for v in voices:
-        if v["id"] == "mf_mukta":
-            v["prefix"] = args.mukta_speaker
-        elif v["id"] == "mm_dnyanesh":
-            v["prefix"] = args.dnyanesh_speaker
 
     rng = random.Random(args.seed)
 

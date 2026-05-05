@@ -1,18 +1,18 @@
-# bol-tts-marathi v0.4 SMOKE TEST — 1-epoch architecture validation.
+# bol-tts-marathi v0.4 SMOKE — 2-epoch frozen→unfrozen architecture validation.
 #
 # Identical to config_marathi_v0_4_langcond.yml except:
-#   - epochs: 1 (just enough for ~62 steps at bs=8 on a 500-row manifest)
+#   - epochs: 2 (1 frozen with freeze_backbone_epochs:1 + 1 unfrozen)
 #   - data_params point at the stub smoke manifests (lang_ids are pseudo-random
 #     not semantically aligned — fine for architecture validation)
 #   - log_dir is a separate "smoke" subdir so it doesn't pollute the real run
 #
-# What this validates:
-#   1. patches apply cleanly (CustomAlbert has lang_embedding, dataloader emits
-#      9-element batches, train_second.py threads lang_ids through)
-#   2. forward+backward runs end-to-end without NaN
-#   3. lang_embedding gradient flows (both rows: mr=0 and en=1)
-#   4. predictor_encoder norm stays >0.5 across the epoch (no v0.2-attempt-1 collapse)
-#   5. continuation init from v0.2 final ckpt works with strict=False loading
+# What this validates (smoke #6, post-v0.4.3 load_checkpoint fix):
+#   1. patches apply cleanly (lang_embedding present, lang_ids threaded through)
+#   2. forward+backward runs end-to-end without NaN across BOTH epochs
+#   3. epoch-0 weight norms byte-identical to v0.2 baseline (load fix)
+#   4. epoch-1 (UNFROZEN) — predictor_encoder norm stays > 0.5, no v0.2-attempt-1
+#      collapse, no catastrophic drift now that grads flow through the backbone
+#   5. validation loss stays in the 0.20-0.25 range across both epochs
 #
 # What this does NOT validate:
 #   - Whether v0.4 actually improves Minglish quality (need full run + eval)
@@ -21,12 +21,12 @@
 # Launch (from kokoro-deutsch/StyleTTS2):
 #   STAGE=2 CONFIG=../../bol-tts-marathi/experiments/v0_4_lang_conditioning/configs/config_marathi_v0_4_smoke.yml ./launch_training.sh
 #
-# Expected runtime: ~5-10 min on A100. Watch the predictor_encoder norms and
-# lang_embedding gradients in the TensorBoard log.
+# Expected runtime: ~10-15 min on A100. Watch predictor_encoder norm at end
+# of epoch 1 and the validation-loss delta epoch0→1.
 batch_size: 8
-epochs: 1
+epochs: 2
 epochs_1st: 10
-epochs_2nd: 1
+epochs_2nd: 2
 save_freq: 1
 
 pretrained_model: "logs/kokoro-marathi/epoch_2nd_v0_2_FINAL.pth"
@@ -34,11 +34,16 @@ first_stage_path: "first_stage.pth"
 load_only_params: true
 second_stage_load_pretrained: true
 
+# v0.4.2: freeze the loaded backbone for first N epochs so only lang_embedding
+# trains during the warmup (prevents the cascading gradient pressure that
+# catastrophically reshaped trained modules in v0.4.0/4.1 — see post-mortem).
+freeze_backbone_epochs: 1
+
 log_dir: "logs/kokoro-marathi-v0_4-smoke"
 
 data_params:
-  train_data: "../experiments/v0_4_lang_conditioning/data/train_list_smoke.txt"
-  val_data: "../experiments/v0_4_lang_conditioning/data/val_list_smoke.txt"
+  train_data: "../experiments/v0_4_lang_conditioning/data/train_list_smoke_intspk.txt"
+  val_data: "../experiments/v0_4_lang_conditioning/data/val_list_smoke_intspk.txt"
   root_path: "../dataset/audio"
   OOD_data: "../training/OOD_texts.txt"
   min_length: 50

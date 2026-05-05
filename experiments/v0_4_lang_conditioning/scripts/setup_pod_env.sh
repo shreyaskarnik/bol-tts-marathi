@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
-# Persist Python deps to /workspace/.local so they survive pod stop/restart.
-# /workspace is RunPod's network-attached persistent volume; container disk
-# (where pip installs default to) gets wiped on every pod restart.
+# Make sure torch + transformers + monotonic_align are importable. On RunPod
+# pods that already ship them system-wide (current Kokoro pod image), this is
+# a no-op. On a fresh pod, install to /root/.local — container disk is fast,
+# /workspace is glacial MooseFS (~22 KB/s for pip), so we accept the
+# pod-restart-wipe tradeoff.
 #
-# Idempotent — re-running detects existing installs and skips. Call this
-# at the top of any v0.4 launch script before invoking torch/transformers.
+# Idempotent — re-running detects existing installs and skips.
 #
 # Usage on the pod:
 #     bash setup_pod_env.sh
-#     source <(grep -E '^export' setup_pod_env.sh)   # also: shell-local PATH
 
 set -euo pipefail
 
-export PYTHONUSERBASE=/workspace/.local
-export PATH=/workspace/.local/bin:$PATH
-
-mkdir -p "$PYTHONUSERBASE"
-
-# Idempotency check — if torch 2.6 + transformers + monotonic_align all import,
-# we're done. (Probing all three since one of them missing would still break.)
-if python -c "
-import sys
-sys.path.insert(0, '$PYTHONUSERBASE/lib/python3.11/site-packages')
+# Idempotency check FIRST — probe whatever Python sees right now (system,
+# /root/.local, anywhere). If all three deps import with a torch 2.6 build,
+# we're done. The previous version of this check inserted a hardcoded
+# /workspace/.local path that broke when /workspace was wiped.
+if python3 -c "
 import torch, transformers, monotonic_align
 assert torch.__version__.startswith('2.6'), f'wrong torch: {torch.__version__}'
 " >/dev/null 2>&1; then
-    echo "[setup_pod_env] deps already in $PYTHONUSERBASE — skipping reinstall"
-    echo "                torch + transformers + monotonic_align all importable"
+    echo "[setup_pod_env] deps already importable system-wide — skipping reinstall"
+    python3 -c "import torch, transformers; print(f'                torch={torch.__version__}  transformers={transformers.__version__}')"
     exit 0
 fi
+
+# Fresh pod path — install to /root/.local (container disk, fast).
+export PYTHONUSERBASE=/root/.local
+export PATH=/root/.local/bin:$PATH
+mkdir -p "$PYTHONUSERBASE"
 
 echo "[setup_pod_env] installing deps to $PYTHONUSERBASE (~3-5 min)"
 
@@ -63,5 +63,5 @@ echo ""
 echo "[setup_pod_env] DONE. deps in $PYTHONUSERBASE"
 echo ""
 echo "Add to ~/.bashrc (or every fresh shell) so future pod sessions find these:"
-echo "  export PYTHONUSERBASE=/workspace/.local"
-echo "  export PATH=/workspace/.local/bin:\$PATH"
+echo "  export PYTHONUSERBASE=/root/.local"
+echo "  export PATH=/root/.local/bin:\$PATH"

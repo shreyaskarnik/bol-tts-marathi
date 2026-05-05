@@ -33,6 +33,12 @@ first_stage_path: "first_stage.pth"
 load_only_params: true
 second_stage_load_pretrained: true   # continuation from v0.2 — see header note
 
+# v0.4.2: freeze the loaded backbone for first 1 epoch so only lang_embedding
+# trains during warmup (prevents the catastrophic weight shrinkage we hit in
+# v0.4.0/4.1 — decoder/predictor/encoders dropped 50-72% in 1 epoch when
+# allowed to train alongside a freshly-added lang_embedding parameter).
+freeze_backbone_epochs: 1
+
 # Smoke-test mode: when STYLETTS2_SMOKE_TEST=1 in env, train_second.py should
 # bail after ~50-100 steps. (Implementation note: this hook is wired in the
 # same patch that adds lang_ids; see scripts/train_v0_4_smoke.sh.)

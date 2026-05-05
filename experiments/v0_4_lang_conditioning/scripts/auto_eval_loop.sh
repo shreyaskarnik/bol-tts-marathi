@@ -21,6 +21,7 @@ CKPT_PATTERN="$LOG_DIR/epoch_2nd_*.pth"
 SAMPLES_DIR="$LOG_DIR/audio_samples"
 
 EXP_DIR=/workspace/bol_run/experiments/v0_4_lang_conditioning
+STYLETTS2_DIR=/workspace/bol_run/StyleTTS2
 CONFIG="$EXP_DIR/configs/config_marathi_v0_4_langcond.yml"
 SYNTH="$EXP_DIR/scripts/synth_v0_4.py"
 VOICEPACK="${VOICEPACK:-/workspace/bol_run/mf_mukta.bin}"  # upload one before launch
@@ -33,8 +34,10 @@ VOICEPACK="${VOICEPACK:-/workspace/bol_run/mf_mukta.bin}"  # upload one before l
 mkdir -p "$SAMPLES_DIR"
 
 # Persistent env (in case pane started fresh)
-export PYTHONUSERBASE=/workspace/.local
-export PATH=/workspace/.local/bin:$PATH
+# Default to /root/.local for container-disk installs (faster than MooseFS).
+# Override PYTHONUSERBASE in caller env if you've installed to /workspace/.local.
+export PYTHONUSERBASE="${PYTHONUSERBASE:-/root/.local}"
+export PATH="${PYTHONUSERBASE}/bin:$PATH"
 
 echo "[auto_eval] watching $LOG_DIR for new ckpts..."
 echo "[auto_eval] writing samples to $SAMPLES_DIR"
@@ -61,12 +64,14 @@ while true; do
 
         echo ""
         echo "[auto_eval] new ckpt: $ckpt → $wav"
-        time python "$SYNTH" \
+        # cd into StyleTTS2 dir so the v0.4 config's relative ASR/F0 paths resolve.
+        # synth_v0_4.py imports models.py which calls _load_config('Utils/ASR/config.yml').
+        (cd "$STYLETTS2_DIR" && time python "$SYNTH" \
             --ckpt      "$ckpt" \
             --voicepack "$VOICEPACK" \
             --config    "$CONFIG" \
             --output    "$wav" \
-            --device    cuda \
+            --device    cuda) \
         || { echo "[auto_eval] synth FAILED for $ckpt — see error above"; continue; }
 
         # Quick stats so user can scan log without listening
